@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shark vs Fish Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    body { margin: 0; }
+    canvas { display: block; margin: auto; background: #003344; }
+    #startBtn {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<button id="startBtn">Start Game</button>
+<script>
+let shark;
+let fishes = [];
+let rocks = [];
+let sharkHealth = 100;
+let gameOver = false;
+let gameStarted = false;
+
+let sharkSize = 60;
+let rockSize = 90;
+let sharkSpeed = 3;
+let velocity;
+
+let spawnTimer = 0;
+
+function setup() {
+  let canvas = createCanvas(800, 600);
+  canvas.parent(document.body);
+  noLoop();
+  velocity = createVector(0, 0);
+
+  document.getElementById('startBtn').onclick = () => {
+    startGame();
+  };
+}
+
+function startGame() {
+  gameStarted = true;
+  shark = createVector(width / 2, height / 2);
+  sharkHealth = 100;
+  gameOver = false;
+  fishes = [];
+  rocks = [];
+
+  for (let i = 0; i < 6; i++) {
+    fishes.push(newFish());
+  }
+  for (let i = 0; i < 4; i++) {
+    rocks.push(createVector(random(width), random(height)));
+  }
+  document.getElementById('startBtn').style.display = 'none';
+  loop();
+}
+
+function newFish() {
+  return {
+    pos: createVector(random(width), random(height)),
+    vel: createVector(random(-1.5, 1.5), random(-1.5, 1.5)),
+    hiding: false
+  };
+}
+
+function draw() {
+  background(0, 50, 80);
+  if (!gameStarted) return;
+
+  velocity.set(0, 0);
+  if (keyIsDown(LEFT_ARROW)) velocity.x = -sharkSpeed;
+  if (keyIsDown(RIGHT_ARROW)) velocity.x = sharkSpeed;
+  if (keyIsDown(UP_ARROW)) velocity.y = -sharkSpeed;
+  if (keyIsDown(DOWN_ARROW)) velocity.y = sharkSpeed;
+  shark.add(velocity);
+  shark.x = constrain(shark.x, sharkSize / 2, width - sharkSize / 2);
+  shark.y = constrain(shark.y, sharkSize / 2, height - sharkSize / 2);
+
+  fill(120);
+  for (let rock of rocks) {
+    ellipse(rock.x, rock.y, rockSize);
+  }
+
+  fill(255, 0, 0);
+  ellipse(shark.x, shark.y, sharkSize);
+
+  fill(0, 255, 255);
+  for (let i = fishes.length - 1; i >= 0; i--) {
+    let fish = fishes[i];
+    fish.hiding = false;
+    for (let rock of rocks) {
+      if (dist(fish.pos.x, fish.pos.y, rock.x, rock.y) < rockSize / 2) {
+        fish.hiding = true;
+      }
+    }
+    if (!fish.hiding || frameCount % 60 < 30) {
+      ellipse(fish.pos.x, fish.pos.y, 20);
+    }
+
+    let flee = p5.Vector.sub(fish.pos, shark).setMag(0.5);
+    fish.vel.add(flee.mult(0.01));
+    fish.pos.add(fish.vel);
+
+    if (fish.pos.x <= 10 || fish.pos.x >= width - 10) fish.vel.x *= -1;
+    if (fish.pos.y <= 10 || fish.pos.y >= height - 10) fish.vel.y *= -1;
+
+    fish.pos.x = constrain(fish.pos.x, 10, width - 10);
+    fish.pos.y = constrain(fish.pos.y, 10, height - 10);
+
+    if (dist(shark.x, shark.y, fish.pos.x, fish.pos.y) < (sharkSize / 2 + 10) && !fish.hiding) {
+      fishes.splice(i, 1);
+      sharkHealth += 10;
+      playSound('eat');
+    }
+  }
+
+  for (let rock of rocks) {
+    if (dist(shark.x, shark.y, rock.x, rock.y) < (sharkSize / 2 + rockSize / 2)) {
+      sharkHealth -= 0.5;
+      playSound('hit');
+    }
+  }
+
+  drawHealthBar();
+
+  spawnTimer++;
+  if (spawnTimer >= 60 * 5) {
+    fishes.push(newFish());
+    spawnTimer = 0;
+  }
+
+  if (sharkHealth <= 0) {
+    endGame("🐟 Fish Win! Shark Died!");
+  }
+
+  if (fishes.length === 0 && sharkHealth > 0) {
+    endGame("🦈 Shark Wins! All Fish Eaten!");
+  }
+}
+
+function endGame(msg) {
+  gameOver = true;
+  fill(255, 255, 0);
+  textSize(40);
+  text(msg, width / 2 - textWidth(msg) / 2, height / 2);
+  noLoop();
+  setTimeout(() => location.reload(), 5000);
+}
+
+function drawHealthBar() {
+  let w = 200;
+  let h = 20;
+  let x = 10;
+  let y = 10;
+  fill(255);
+  rect(x - 2, y - 2, w + 4, h + 4);
+  fill(lerpColor(color('red'), color('green'), sharkHealth / 100));
+  rect(x, y, constrain(sharkHealth, 0, 100) * 2, h);
+}
+
+function playSound(type) {
+  if (!window.AudioContext) return;
+  let ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let o = ctx.createOscillator();
+  let g = ctx.createGain();
+  o.connect(g);
+  g.connect(ctx.destination);
+  if (type === 'eat') o.frequency.value = 300;
+  if (type === 'hit') o.frequency.value = 120;
+  o.start(0);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+  o.stop(ctx.currentTime + 0.5);
+}
+</script>
+</body>
+</html>
